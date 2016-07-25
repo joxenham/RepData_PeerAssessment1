@@ -1,0 +1,99 @@
+---
+title: "Reproducable Research - Assignment 1"
+author: "James Oxenham"
+date: "July 25, 2016"
+output: html_document
+---
+## Loading data
+```{r}
+setwd("H:/Coursera R Directory")
+data <- read.csv("activity.csv")
+```
+
+## What is the mean total number of steps taken per day?
+
+```{r}
+install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+library(ggplot2)
+daily.steps <- tapply(data$steps, data$date, FUN=sum, na.rm=T)
+qplot(daily.steps, binwidth=1000, xlab="total steps per day")
+mean(daily.steps, na.rm=T)
+median(daily.steps, na.rm=T)
+```
+
+## What is the average daily activity pattern?
+
+```{r}
+library(ggplot2)
+averages <- aggregate (x=list(steps=data$steps), by=list(interval=data$interval), FUN=mean, na.rm=T)
+ggplot(data=averages, aes(x=interval, y=steps)) + 
+    geom_line() + 
+    xlab("Interval (5 minutes)") +
+    ylab("Average Steps Taken")
+```
+
+### On average across all the days in the dataset, the 5-minute interval contains the maximum number of steps?
+
+```{r}
+averages[which.max(averages$steps),]
+```
+
+## Imputing missing values
+
+### There are many days and intervals which are missing data(listed in the raw code as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
+
+```{r}
+mdata <- is.na(data$steps)
+# How much data is missing?
+table(mdata)
+```
+
+### All missing values are filled in with the mean value for that 5 minute interval.
+
+```{r}
+# All missing values are filled in with the mean value for that 5 minute interval
+fill.value <- function(steps, interval) {
+  filled <- NA
+  if (!is.na(steps))
+    filled <- c(steps)
+  else
+    filled <- (averages[averages$interval==interval, "steps"])
+  return(filled)
+}
+filled.data <- data
+filled.data$steps <- mapply(fill.value, filled.data$steps, filled.data$interval)
+```
+### Then, using the completed data set, let's make a histogram of the total number of steps taken each day and calculate the mean and median steps.
+
+```{r}
+total.steps <- tapply(filled.data$steps, filled.data$date, FUN=sum)
+qplot(total.steps, binwidth=1000, xlab="total steps taken each day")
+mean(total.steps)
+median(total.steps)
+```
+
+### Mean and median values are higher after filling in missing data. The reason is that in the original data, there are some days with steps values NA for any interval. The total number of steps taken in such days are set to 0s by default. However, after replacing missing steps values with the mean steps of associated interval value, these 0 are removed from the histogram of total number of steps taken each day.
+
+##Are there differences in activity patterns between weekdays and weekends?
+
+### First, we need to find the day of week for each measurement. For this part we will use the dataset with the missing values filled in.
+
+```{r}
+weekday.or.weekend <- function(date) {
+  day <- weekdays(date)
+  if (day %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+    return("weekday")
+  else if (day %in% c("Saturday", "Sunday"))
+    return("weekend")
+  else
+    stop("invalid date")
+}
+filled.data$date <- as.Date(filled.data$date)
+filled.data$day <- sapply(filled.data$date, FUN=weekday.or.weekend)
+```
+### Next, we will make a panel plot with plots of average number of steps taken on weekdays and weekends
+```{r}
+averages <- aggregate(steps ~ interval + day, data=filled.data, mean)
+ggplot(averages, aes(interval, steps)) + geom_line() + facet_grid(day ~ .) +
+    xlab("Interval (by 5-minutes)") + ylab("Number of steps")
+```
